@@ -40,30 +40,56 @@ app.get('/ver', (req, res) => res.sendFile(path.join(__dirname, 'ver.html')));
 app.get('/ofrenda', (req, res) => res.sendFile(path.join(__dirname, 'ofrenda.html')));
 
 // Subir memorial/ofrenda
+// Subir memorial/ofrenda
 app.post('/subir', upload.single('imagen'), async (req, res) => {
-  const { nombre, edad, tipo, recuerdo } = req.body;
+  try {
+    console.log('=== Nuevo request /subir ===');
+    console.log('Body recibido:', req.body);
+    console.log('Archivo recibido:', req.file);
 
-  if (!req.file || !nombre || !edad || !tipo || !recuerdo) {
-    return res.status(400).json({ ok: false, error: 'Faltan datos' });
+    const { nombre, edad, tipo, recuerdo } = req.body;
+
+    // Validar datos
+    if (!req.file || !nombre || !edad || !tipo || !recuerdo) {
+      console.log('Faltan datos en el request');
+      return res.status(400).json({ ok: false, error: 'Faltan datos' });
+    }
+
+    // Asegurar que exista carpeta uploads
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const fs = require('fs');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir);
+      console.log('Carpeta uploads creada');
+    }
+
+    // Guardar imagen en uploads/
+    const filename = Date.now() + '-' + req.file.originalname;
+    const filepath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filepath, req.file.buffer);
+    console.log('Imagen guardada en:', filepath);
+
+    // Guardar en MongoDB
+    const newMemorial = new Memorial({
+      nombre,
+      edad,
+      tipo,
+      recuerdo,
+      imagen: '/uploads/' + filename
+    });
+
+    await newMemorial.save();
+    console.log('Memorial guardado en MongoDB con ID:', newMemorial._id);
+
+    res.json({ ok: true, memorial: newMemorial });
+
+  } catch (err) {
+    console.error('Error guardando memorial:', err);
+    res.status(500).json({ ok: false, error: 'Error interno al guardar' });
   }
-
-  // Guardar imagen en uploads/
-  const filename = Date.now() + '-' + req.file.originalname;
-  const filepath = path.join(__dirname, 'uploads', filename);
-  require('fs').writeFileSync(filepath, req.file.buffer);
-
-  // Guardar en MongoDB
-  const newMemorial = new Memorial({
-    nombre,
-    edad,
-    tipo,
-    recuerdo,
-    imagen: '/uploads/' + filename
-  });
-
-  await newMemorial.save();
-  res.json({ ok: true, memorial: newMemorial });
 });
+
+
 
 // Agregar velitas
 app.post('/velita', async (req, res) => {
